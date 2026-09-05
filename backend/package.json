@@ -8,7 +8,8 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "check": "node --loader ts-node/esm src/services/roadGenerator/agentGrowth.check.ts",
-    "check:subdivider": "node --loader ts-node/esm src/services/roadGenerator/blockSubdivider.check.ts"
+    "check:subdivider": "node --loader ts-node/esm src/services/roadGenerator/blockSubdivider.check.ts",
+    "check:scorer": "node --loader ts-node/esm src/services/zoningScorer/scoreParcel.check.ts"
   },
   "dependencies": {
     "@turf/turf": "^7.1.0",
