@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { createCityCanvas, type CityCanvas } from '../canvas/PixiApp';
+import { attachCityRenderer } from '../canvas/renderers/cityRenderer';
 
 export function CanvasHost() {
   const hostRef = useRef<HTMLDivElement>(null);
@@ -8,6 +9,7 @@ export function CanvasHost() {
   useEffect(() => {
     if (!hostRef.current) return;
     let cancelled = false;
+    let detachRenderer: (() => void) | null = null;
 
     createCityCanvas(hostRef.current).then((canvas) => {
       if (cancelled) {
@@ -15,10 +17,12 @@ export function CanvasHost() {
         return;
       }
       canvasRef.current = canvas;
+      detachRenderer = attachCityRenderer(canvas.layers);
     });
 
     return () => {
       cancelled = true;
+      detachRenderer?.();
       canvasRef.current?.destroy();
       canvasRef.current = null;
     };

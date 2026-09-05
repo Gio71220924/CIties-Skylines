@@ -34,6 +34,9 @@ export async function createCityCanvas(host: HTMLDivElement): Promise<CityCanvas
   });
   app.stage.addChild(viewport);
   viewport.drag().pinch().wheel().decelerate();
+  viewport.clampZoom({ minScale: 0.05, maxScale: 4 });
+  viewport.clamp({ left: 0, right: 10000, top: 0, bottom: 10000 });
+  viewport.fitWorld(true); // whole 5x5 tile grid visible on first paint, not just the top-left corner
 
   // TODO: LOD switch (per-tile summary vs per-cell detail) keyed off viewport.scale.x
   const layers: CityLayers = {
