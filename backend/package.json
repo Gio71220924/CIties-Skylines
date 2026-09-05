@@ -10,7 +10,8 @@
     "check": "node --loader ts-node/esm src/services/roadGenerator/agentGrowth.check.ts",
     "check:subdivider": "node --loader ts-node/esm src/services/roadGenerator/blockSubdivider.check.ts",
     "check:scorer": "node --loader ts-node/esm src/services/zoningScorer/scoreParcel.check.ts",
-    "check:city": "node --loader ts-node/esm src/services/cityService.check.ts"
+    "check:city": "node --loader ts-node/esm src/services/cityService.check.ts",
+    "check:transit": "node --loader ts-node/esm src/services/transitRouter/transitRouter.check.ts"
   },
   "dependencies": {
     "@turf/turf": "^7.1.0",
