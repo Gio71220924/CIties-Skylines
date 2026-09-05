@@ -1,21 +1,29 @@
 import { Router } from 'express';
-import type { Tile } from '../types/grid.js';
 import { requireApiKey } from '../middleware/apiKey.js';
+import { resolveStyle } from '../config/styles.js';
+import { GRID_SIZE, createCityState, unlockTile, type CityState } from '../services/cityService.js';
 
 export const tilesRouter = Router();
 
 // In-memory placeholder store — swap for real DB (schema in src/db/schema.sql) once persistence is wired up.
-const tiles: Tile[] = [];
+const cities = new Map<string, CityState>();
 
-const GRID_SIZE = 5; // CS1: fixed 5x5 tile grid
+function getOrCreateCity(cityId: string): CityState {
+  let city = cities.get(cityId);
+  if (!city) {
+    city = createCityState();
+    cities.set(cityId, city);
+  }
+  return city;
+}
 
 tilesRouter.get('/:cityId', (req, res) => {
-  const cityTiles = tiles.filter((t) => t.cityId === req.params.cityId);
-  res.json(cityTiles);
+  const city = getOrCreateCity(req.params.cityId);
+  res.json(city.tiles);
 });
 
 tilesRouter.post('/:cityId/unlock', requireApiKey, (req, res) => {
-  const { gridX, gridY } = req.body as { gridX?: unknown; gridY?: unknown };
+  const { gridX, gridY, style: styleName } = req.body as { gridX?: unknown; gridY?: unknown; style?: unknown };
 
   const isValidCoord = (v: unknown): v is number =>
     typeof v === 'number' && Number.isInteger(v) && v >= 0 && v < GRID_SIZE;
@@ -25,15 +33,16 @@ tilesRouter.post('/:cityId/unlock', requireApiKey, (req, res) => {
     return;
   }
 
-  const tile: Tile = {
-    id: `${req.params.cityId}-${gridX}-${gridY}`,
-    cityId: req.params.cityId,
-    gridX,
-    gridY,
-    status: 'unlocked',
-    unlockMilestone: 0,
-  };
-  tiles.push(tile);
-  // TODO: trigger roadGenerator.generateRoads() + zoningScorer + transitRouter for this tile
-  res.status(201).json(tile);
+  const city = getOrCreateCity(req.params.cityId);
+
+  if (city.tiles.some((t) => t.gridX === gridX && t.gridY === gridY)) {
+    res.status(409).json({ error: 'tile already unlocked' });
+    return;
+  }
+
+  const style = resolveStyle(typeof styleName === 'string' ? styleName : undefined);
+  const result = unlockTile(city, req.params.cityId, gridX, gridY, style);
+
+  // TODO: trigger transitRouter.generateTransitNetwork() once implemented.
+  res.status(201).json(result);
 });
