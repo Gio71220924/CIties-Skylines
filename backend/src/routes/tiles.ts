@@ -43,6 +43,5 @@ tilesRouter.post('/:cityId/unlock', requireApiKey, (req, res) => {
   const style = resolveStyle(typeof styleName === 'string' ? styleName : undefined);
   const result = unlockTile(city, req.params.cityId, gridX, gridY, style);
 
-  // TODO: trigger transitRouter.generateTransitNetwork() once implemented.
   res.status(201).json(result);
 });

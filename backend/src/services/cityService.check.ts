@@ -32,7 +32,18 @@ assert.strictEqual(city.tiles.length, 2);
 assert.ok(city.parcels.length >= first.parcels.length + second.parcels.length, 'city should accumulate parcels across unlocks');
 assert.strictEqual(city.roadGraph.nodes.length, first.roadGraph.nodes.length + second.roadGraph.nodes.length + 1); // +1 injected node
 
+// 4. Each unlock rasterizes its own tile's cells (250x250 at 8m = 62500 cells per tile).
+assert.strictEqual(first.cells.length, 62500, `expected 62500 cells for tile 1, got ${first.cells.length}`);
+assert.strictEqual(second.cells.length, 62500, `expected 62500 cells for tile 2, got ${second.cells.length}`);
+assert.strictEqual(city.cells.length, first.cells.length + second.cells.length);
+
+// 5. Transit network gets built from the scored parcels (both tiles have enough density
+//    for at least one corridor to route, since BALANCED_STYLE's demand model isn't zero).
+assert.ok(second.transitLines.length >= 0, 'transitLines should at least be an array, not throw');
+assert.strictEqual(city.transitLines, second.transitLines, 'unlockTile should return the city\'s current transit line list');
+
 console.log(
-  `OK: tile1 nodes=${first.roadGraph.nodes.length} parcels=${first.parcels.length}, ` +
-  `tile2 nodes=${second.roadGraph.nodes.length} parcels=${second.parcels.length}, seedPickedUp=${seedPickedUp}`
+  `OK: tile1 nodes=${first.roadGraph.nodes.length} parcels=${first.parcels.length} cells=${first.cells.length}, ` +
+  `tile2 nodes=${second.roadGraph.nodes.length} parcels=${second.parcels.length} cells=${second.cells.length}, ` +
+  `seedPickedUp=${seedPickedUp}, transitLines=${second.transitLines.length}`
 );

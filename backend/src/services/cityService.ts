@@ -1,7 +1,9 @@
-import type { Parcel, Point, RoadGraph, StyleConfig, Tile } from '../types/grid.js';
+import type { Cell, Parcel, Point, RoadGraph, StyleConfig, Tile, TransitLine, ZoneType } from '../types/grid.js';
 import { generateRoads } from './roadGenerator/agentGrowth.js';
 import { subdivideIntoParcels } from './roadGenerator/blockSubdivider.js';
 import { bestZoneType } from './zoningScorer/scoreParcel.js';
+import { generateTransitNetwork, type DensityNode } from './transitRouter/transitRouter.js';
+import { rasterizeTileToGrid } from './rasterizer/gridOverlay.js';
 
 export const GRID_SIZE = 5; // CS1: fixed 5x5 tile grid
 export const TILE_SIZE = 2000; // meters, CS1 tile is 2km x 2km
@@ -10,11 +12,20 @@ export interface CityState {
   tiles: Tile[];
   roadGraph: RoadGraph;
   parcels: Parcel[];
+  cells: Cell[];
+  transitLines: TransitLine[];
   demand: { population: number; jobs: number };
 }
 
 export function createCityState(): CityState {
-  return { tiles: [], roadGraph: { nodes: [], edges: [] }, parcels: [], demand: { population: 0, jobs: 0 } };
+  return {
+    tiles: [],
+    roadGraph: { nodes: [], edges: [] },
+    parcels: [],
+    cells: [],
+    transitLines: [],
+    demand: { population: 0, jobs: 0 },
+  };
 }
 
 export function tileBoundaryFor(gridX: number, gridY: number): Point[] {
@@ -56,10 +67,65 @@ function findSeedPoints(roadGraph: RoadGraph, boundary: Point[]): Point[] {
   return seeds;
 }
 
+// Rough population/jobs-per-m2 used only to turn zoning recommendations into a demand
+// signal for the transit router's gravity model — not a simulation, just enough to make
+// "denser area -> more corridor demand" hold.
+const ZONE_DENSITY: Partial<Record<ZoneType, { populationPerM2: number; jobsPerM2: number }>> = {
+  resi_low: { populationPerM2: 0.02, jobsPerM2: 0 },
+  resi_high: { populationPerM2: 0.08, jobsPerM2: 0 },
+  comm_low: { populationPerM2: 0, jobsPerM2: 0.015 },
+  comm_high: { populationPerM2: 0, jobsPerM2: 0.05 },
+  office: { populationPerM2: 0, jobsPerM2: 0.06 },
+  industry: { populationPerM2: 0, jobsPerM2: 0.03 },
+};
+
+function polygonArea(points: Point[]): number {
+  let sum = 0;
+  for (let i = 0; i < points.length; i++) {
+    const a = points[i];
+    const b = points[(i + 1) % points.length];
+    sum += a.x * b.y - b.x * a.y;
+  }
+  return Math.abs(sum) / 2;
+}
+
+function polygonCentroid(points: Point[]): Point {
+  const sum = points.reduce((acc, p) => ({ x: acc.x + p.x, y: acc.y + p.y }), { x: 0, y: 0 });
+  return { x: sum.x / points.length, y: sum.y / points.length };
+}
+
+function parcelToDensityNode(parcel: Parcel): DensityNode | null {
+  if (!parcel.suggestedZoneType) return null;
+  const density = ZONE_DENSITY[parcel.suggestedZoneType];
+  if (!density) return null; // park/none don't contribute population or jobs
+  const area = polygonArea(parcel.polygon);
+  return {
+    id: parcel.id,
+    point: polygonCentroid(parcel.polygon),
+    projectedPopulation: area * density.populationPerM2,
+    projectedJobs: area * density.jobsPerM2,
+  };
+}
+
+function recomputeDemand(city: CityState): void {
+  let population = 0;
+  let jobs = 0;
+  for (const parcel of city.parcels) {
+    const node = parcelToDensityNode(parcel);
+    if (node) {
+      population += node.projectedPopulation;
+      jobs += node.projectedJobs;
+    }
+  }
+  city.demand = { population, jobs };
+}
+
 export interface UnlockResult {
   tile: Tile;
   roadGraph: RoadGraph; // only the segments added by this unlock
   parcels: Parcel[]; // only the parcels added by this unlock
+  cells: Cell[]; // only this tile's rasterized grid
+  transitLines: TransitLine[]; // full city-wide list (lines can span multiple tiles)
 }
 
 export function unlockTile(city: CityState, cityId: string, gridX: number, gridY: number, style: StyleConfig): UnlockResult {
@@ -94,10 +160,13 @@ export function unlockTile(city: CityState, cityId: string, gridX: number, gridY
     maxSplitDepth: 8,
   });
 
+  // Scored against demand/transit stops as they stood *before* this tile's own parcels
+  // exist — this tile's zoning reacts to the city so far, not to itself.
+  const existingTransitStops = city.transitLines.flatMap((line) => line.stops);
   for (const parcel of parcels) {
     const best = bestZoneType(parcel, {
       roadGraph: city.roadGraph,
-      transitStops: [],
+      transitStops: existingTransitStops,
       neighborParcels: city.parcels,
       demand: city.demand,
       style,
@@ -106,6 +175,14 @@ export function unlockTile(city: CityState, cityId: string, gridX: number, gridY
     parcel.score = best.score;
   }
   city.parcels.push(...parcels);
+  recomputeDemand(city);
 
-  return { tile, roadGraph: newRoads, parcels };
+  const densityMap = city.parcels.map(parcelToDensityNode).filter((n): n is DensityNode => n !== null);
+  city.transitLines = generateTransitNetwork(city.roadGraph, densityMap, style, city.transitLines);
+
+  const newTransitStopPoints = city.transitLines.flatMap((line) => line.stops.map((s) => s.point));
+  const cells = rasterizeTileToGrid(tile.id, boundary, parcels, city.roadGraph, newTransitStopPoints);
+  city.cells.push(...cells);
+
+  return { tile, roadGraph: newRoads, parcels, cells, transitLines: city.transitLines };
 }
