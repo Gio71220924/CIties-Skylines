@@ -1,7 +1,6 @@
 import type { Cell, Parcel, PlanningStyle, RoadGraph, Tile, TransitLine } from '../types/grid';
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:4000';
-const API_KEY = import.meta.env.VITE_API_KEY;
 
 export interface UnlockTileResult {
   tile: Tile;
@@ -11,12 +10,16 @@ export interface UnlockTileResult {
   transitLines: TransitLine[];
 }
 
+// requireApiKey on the backend is a stopgap for trusted/service callers, not for a public
+// browser client — any VITE_* env var gets inlined into the built JS bundle, so shipping
+// the key here would leak it to every visitor. The frontend needs real session/cookie auth
+// (credentials: 'include' + a backend session check) before it can call protected mutations;
+// until that lands, mutating requests from this client will 401 against a deployed backend.
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     ...init,
     headers: {
       'Content-Type': 'application/json',
-      ...(API_KEY ? { 'x-api-key': API_KEY } : {}),
       ...init?.headers,
     },
   });
