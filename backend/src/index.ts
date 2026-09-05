@@ -3,7 +3,10 @@ import cors from 'cors';
 import { tilesRouter } from './routes/tiles.js';
 
 const app = express();
-app.use(cors());
+
+// Default matches the Vite dev server; override via CORS_ORIGIN (comma-separated) in other envs.
+const allowedOrigins = (process.env.CORS_ORIGIN ?? 'http://localhost:5173').split(',');
+app.use(cors({ origin: allowedOrigins }));
 app.use(express.json());
 
 app.get('/health', (_req, res) => {
