@@ -62,4 +62,50 @@ export interface RoadGraph {
   edges: RoadSegment[];
 }
 
+export interface Parcel {
+  id: string;
+  tileId: string;
+  polygon: Point[];
+  suggestedZoneType: ZoneType | null;
+  score: number;
+}
+
+export type TransitMode = 'bus' | 'metro' | 'tram';
+
+export interface TransitStop {
+  id: string;
+  point: Point;
+  nearestNodeId: string;
+  lineIds: string[];
+}
+
+export interface TransitLine {
+  id: string;
+  mode: TransitMode;
+  roadPath: RoadSegment[];
+  stops: TransitStop[];
+  demandScore: number;
+}
+
 export type PlanningStyle = 'car_centric' | 'transit_oriented' | 'balanced' | 'custom';
+
+export interface StyleConfig {
+  road: {
+    arterialSpacing: number;
+    blockSizeCBD: number;
+    blockSizeSuburb: number;
+    parkingLotAllocation: number;
+  };
+  transit: {
+    stopSpacing: number;
+    priorityCorridor: boolean;
+    metroLineBoost: number;
+    corridorCount: number;
+    overlapThreshold: number;
+  };
+  zoningWeights: {
+    roadAccessWeight: number;
+    transitAccessWeight: number;
+    densityNearTransitBonus: number;
+  };
+}
