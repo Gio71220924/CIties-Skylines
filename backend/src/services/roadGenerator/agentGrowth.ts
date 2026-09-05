@@ -270,9 +270,19 @@ export function generateRoads(
   const builder = new RoadNetworkBuilder();
   const queue: ProposedSegment[] = [];
 
+  // A seed sitting exactly on the tile boundary (a neighbor tile's road reaching this edge)
+  // has roughly half of all random directions pointing straight back out of the tile — retry
+  // until we find one that at least starts inside, instead of silently growing nothing.
+  const MAX_SEED_ANGLE_ATTEMPTS = 16;
   for (const seed of seedPoints) {
-    const angle = randomRange(0, 360);
-    queue.push({ start: seed, end: pointAt(seed, angle, params.arterialLength), type: 'arterial', depth: 0 });
+    for (let attempt = 0; attempt < MAX_SEED_ANGLE_ATTEMPTS; attempt++) {
+      const angle = randomRange(0, 360);
+      const end = pointAt(seed, angle, params.arterialLength);
+      if (isPointInPolygon(end, tileBoundary)) {
+        queue.push({ start: seed, end, type: 'arterial', depth: 0 });
+        break;
+      }
+    }
   }
 
   let iterations = 0;
