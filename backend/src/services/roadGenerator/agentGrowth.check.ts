@@ -44,4 +44,30 @@ const fullBlock = generateRoads(
 );
 assert.strictEqual(fullBlock.edges.length, 0, `expected 0 edges with full terrain block, got ${fullBlock.edges.length}`);
 
-console.log(`OK: ${graph.nodes.length} nodes, ${graph.edges.length} edges`);
+// 5. Multiple far-apart seeds (like interiorSeedGrid's 3x3 grid) end up as ONE connected
+//    network, not scattered disconnected islands — connectIslands' job.
+const multiSeedGraph = generateRoads(
+  [
+    { x: 300, y: 300 },
+    { x: 1700, y: 300 },
+    { x: 300, y: 1700 },
+    { x: 1700, y: 1700 },
+    { x: 1000, y: 1000 },
+  ],
+  tileBoundary,
+  [],
+  style
+);
+function countComponents(nodes: typeof multiSeedGraph.nodes, edges: typeof multiSeedGraph.edges): number {
+  const parent = new Map(nodes.map((n) => [n.id, n.id]));
+  function find(x: string): string {
+    while (parent.get(x) !== x) x = parent.get(x) as string;
+    return x;
+  }
+  for (const e of edges) parent.set(find(e.fromNodeId), find(e.toNodeId));
+  return new Set(nodes.map((n) => find(n.id))).size;
+}
+const componentCount = countComponents(multiSeedGraph.nodes, multiSeedGraph.edges);
+assert.strictEqual(componentCount, 1, `expected 1 connected component across 5 far-apart seeds, got ${componentCount}`);
+
+console.log(`OK: ${graph.nodes.length} nodes, ${graph.edges.length} edges, multiSeed components=${componentCount}`);

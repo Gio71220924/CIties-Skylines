@@ -248,6 +248,78 @@ function priorityOf(seg: ProposedSegment): number {
   return (seg.type === 'arterial' ? 0 : 1000) + seg.depth;
 }
 
+// --- island connection (post-process) --------------------------------------
+// Independent seed clusters (interiorSeedGrid, cityService.ts) grow without knowing about
+// each other, so they usually end up as disconnected islands. Merge them: find connected
+// components, then repeatedly connect the closest not-yet-connected component to the
+// growing merged group (Prim's-style MST over components) until one network remains.
+
+class ComponentUnionFind {
+  private parent = new Map<string, string>();
+  find(x: string): string {
+    if (!this.parent.has(x)) this.parent.set(x, x);
+    const p = this.parent.get(x) as string;
+    if (p === x) return x;
+    const root = this.find(p);
+    this.parent.set(x, root);
+    return root;
+  }
+  union(a: string, b: string): void {
+    this.parent.set(this.find(a), this.find(b));
+  }
+}
+
+function connectIslands(
+  builder: RoadNetworkBuilder,
+  tileBoundary: Point[],
+  terrainMask: Point[][],
+  params: GrowthParams
+): void {
+  if (builder.nodes.length < 2) return;
+
+  const uf = new ComponentUnionFind();
+  for (const node of builder.nodes) uf.find(node.id);
+  for (const edge of builder.edges) uf.union(edge.fromNodeId, edge.toNodeId);
+
+  const componentsByRoot = new Map<string, RoadNode[]>();
+  for (const node of builder.nodes) {
+    const root = uf.find(node.id);
+    const list = componentsByRoot.get(root);
+    if (list) list.push(node);
+    else componentsByRoot.set(root, [node]);
+  }
+  const components = [...componentsByRoot.values()];
+  if (components.length <= 1) return;
+
+  const connected = [0];
+  const remaining = new Set(components.map((_, i) => i).filter((i) => i !== 0));
+
+  while (remaining.size > 0) {
+    let best: { to: number; a: RoadNode; b: RoadNode; dist: number } | null = null;
+    for (const i of connected) {
+      for (const j of remaining) {
+        for (const a of components[i]) {
+          for (const b of components[j]) {
+            const d = distance(a.point, b.point);
+            if (!best || d < best.dist) best = { to: j, a, b, dist: d };
+          }
+        }
+      }
+    }
+    if (!best) break;
+
+    const candidate: ProposedSegment = { start: best.a.point, end: best.b.point, type: 'arterial', depth: 0 };
+    const legalized = legalize(candidate, builder, tileBoundary, terrainMask, params);
+    if (legalized) {
+      builder.commit(legalized.start, legalized.end, 'arterial', 0, params.snapRadius);
+    }
+    // Even if legalize rejected it (e.g. blocked by terrain), mark this pair merged so the
+    // loop makes progress instead of retrying the same unreachable pair forever.
+    connected.push(best.to);
+    remaining.delete(best.to);
+  }
+}
+
 // --- entry point ------------------------------------------------------
 
 function paramsFromStyle(style: StyleConfig, overrides: Partial<GrowthParams>): GrowthParams {
@@ -297,6 +369,8 @@ export function generateRoads(
     builder.commit(legalized.start, legalized.end, legalized.type, legalized.depth, params.snapRadius);
     queue.push(...proposeNext(legalized, params));
   }
+
+  connectIslands(builder, tileBoundary, terrainMask, params);
 
   return { nodes: builder.nodes, edges: builder.edges };
 }
