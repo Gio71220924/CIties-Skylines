@@ -4,16 +4,16 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
+    "dev": "tsx watch src/index.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
-    "check": "node --loader ts-node/esm src/services/roadGenerator/agentGrowth.check.ts",
-    "check:subdivider": "node --loader ts-node/esm src/services/roadGenerator/blockSubdivider.check.ts",
-    "check:scorer": "node --loader ts-node/esm src/services/zoningScorer/scoreParcel.check.ts",
-    "check:city": "node --loader ts-node/esm src/services/cityService.check.ts",
-    "check:transit": "node --loader ts-node/esm src/services/transitRouter/transitRouter.check.ts",
-    "check:rasterizer": "node --loader ts-node/esm src/services/rasterizer/gridOverlay.check.ts",
-    "migrate": "node --loader ts-node/esm src/db/migrate.ts"
+    "check": "tsx src/services/roadGenerator/agentGrowth.check.ts",
+    "check:subdivider": "tsx src/services/roadGenerator/blockSubdivider.check.ts",
+    "check:scorer": "tsx src/services/zoningScorer/scoreParcel.check.ts",
+    "check:city": "tsx src/services/cityService.check.ts",
+    "check:transit": "tsx src/services/transitRouter/transitRouter.check.ts",
+    "check:rasterizer": "tsx src/services/rasterizer/gridOverlay.check.ts",
+    "migrate": "tsx src/db/migrate.ts"
   },
   "dependencies": {
     "@turf/turf": "^7.1.0",
@@ -27,7 +27,7 @@
     "@types/express": "^4.17.21",
     "@types/node": "^22.9.0",
     "@types/pg": "^8.23.1",
-    "ts-node-dev": "^2.0.0",
+    "tsx": "^4.23.13",
     "typescript": "^5.6.3"
   }
 }
