@@ -38,6 +38,15 @@ export async function createCityCanvas(host: HTMLDivElement): Promise<CityCanvas
   viewport.clamp({ left: 0, right: 10000, top: 0, bottom: 10000 });
   viewport.fitWorld(true); // whole 5x5 tile grid visible on first paint, not just the top-left corner
 
+  // pixi-viewport's screenWidth/screenHeight are fixed at construction — app.init's
+  // resizeTo keeps the *renderer* in sync with the host div, but the viewport itself
+  // (what pans/zooms) goes stale on any later resize (DevTools opening/closing, window
+  // resize), leaving pan/zoom clamped to the old, often much smaller, dimensions.
+  const resizeObserver = new ResizeObserver(() => {
+    viewport.resize(host.clientWidth, host.clientHeight);
+  });
+  resizeObserver.observe(host);
+
   // TODO: LOD switch (per-tile summary vs per-cell detail) keyed off viewport.scale.x
   const layers: CityLayers = {
     terrain: new Container(),
@@ -52,6 +61,9 @@ export async function createCityCanvas(host: HTMLDivElement): Promise<CityCanvas
     app,
     viewport,
     layers,
-    destroy: () => app.destroy(true, { children: true }),
+    destroy: () => {
+      resizeObserver.disconnect();
+      app.destroy(true, { children: true });
+    },
   };
 }
