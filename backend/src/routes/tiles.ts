@@ -6,10 +6,14 @@ import { loadCityState, saveCityState } from '../db/cityRepository.js';
 
 export const tilesRouter = Router();
 
+// Returns the full CityState (not just tiles) so a page reload can hydrate the canvas
+// with whatever was already unlocked/scored/routed, instead of showing an empty grid
+// while the backend still knows tiles are unlocked (which is what caused 409s on tiles
+// that looked locked client-side after a refresh).
 tilesRouter.get('/:cityId', async (req, res) => {
   try {
     const city = await loadCityState(req.params.cityId);
-    res.json(city.tiles);
+    res.json(city);
   } catch (err) {
     console.error('GET /api/tiles/:cityId failed:', err);
     res.status(500).json({ error: 'failed to load city state' });
