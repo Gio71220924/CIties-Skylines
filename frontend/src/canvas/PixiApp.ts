@@ -5,6 +5,7 @@ export interface CityLayers {
   terrain: Container;
   infra: Container;
   zoning: Container;
+  transit: Container;
   recommendation: Container;
   selection: Container;
 }
@@ -52,10 +53,18 @@ export async function createCityCanvas(host: HTMLDivElement): Promise<CityCanvas
     terrain: new Container(),
     infra: new Container(),
     zoning: new Container(),
+    transit: new Container(),
     recommendation: new Container(),
     selection: new Container(),
   };
-  viewport.addChild(layers.terrain, layers.infra, layers.zoning, layers.recommendation, layers.selection);
+  viewport.addChild(
+    layers.terrain,
+    layers.infra,
+    layers.zoning,
+    layers.transit,
+    layers.recommendation,
+    layers.selection
+  );
 
   return {
     app,
