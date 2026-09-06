@@ -120,6 +120,22 @@ function recomputeDemand(city: CityState): void {
   city.demand = { population, jobs };
 }
 
+// Cells are a derived/rasterized view (62500 per tile!) — recompute them from
+// tiles+parcels+roadGraph rather than persisting them, or the JSONB blob balloons to the
+// point that saving it to Supabase hangs (this is exactly what happened: 4 tiles ->
+// 250,000 cell objects in one row -> the INSERT/UPDATE never completed within any
+// reasonable timeout).
+export function rehydrateCells(city: CityState): void {
+  const transitStopPoints = city.transitLines.flatMap((line) => line.stops.map((s) => s.point));
+  const cells: Cell[] = [];
+  for (const tile of city.tiles) {
+    const boundary = tileBoundaryFor(tile.gridX, tile.gridY);
+    const tileParcels = city.parcels.filter((p) => p.tileId === tile.id);
+    cells.push(...rasterizeTileToGrid(tile.id, boundary, tileParcels, city.roadGraph, transitStopPoints));
+  }
+  city.cells = cells;
+}
+
 export interface UnlockResult {
   tile: Tile;
   roadGraph: RoadGraph; // only the segments added by this unlock

@@ -9,7 +9,18 @@ const connectionString = process.env.DATABASE_URL;
 // the pooler. Tighten later with NODE_EXTRA_CA_CERTS pointing at Supabase's published CA
 // bundle if that residual risk needs closing for production.
 export const pool = connectionString
-  ? new Pool({ connectionString, ssl: { rejectUnauthorized: false } })
+  ? new Pool({
+      connectionString,
+      ssl: { rejectUnauthorized: false },
+      // Without these, a client waiting on a busy pool (Supabase's transaction pooler has
+      // a modest concurrent-connection cap) blocks with no timeout — a request just hangs
+      // forever instead of failing fast. max caps how many connections this process opens;
+      // idleTimeoutMillis releases them back to the pooler promptly instead of sitting on
+      // slots between requests.
+      max: 5,
+      idleTimeoutMillis: 10_000,
+      connectionTimeoutMillis: 5_000,
+    })
   : null;
 
 export function requireDb(): Pool {
