@@ -113,15 +113,40 @@ export function subdivideIntoParcels(
   // blocks that back onto the tile edge, and dangling stub edges (unconnected neighbor
   // tile) are dropped automatically by turf's graph cleanup, leaving that area unclaimed
   // until the neighbor tile unlocks and the road actually connects.
+  //
+  // With multiple independent seed points (spread across the tile so road coverage
+  // actually reaches the whole area), edges from different clusters occasionally cross
+  // or snap near-coincidentally, producing a near-zero-length segment that crashes turf's
+  // polygonize (EdgeRing.toPolygon throws on a degenerate ring). Drop those before they
+  // ever reach turf.
+  const MIN_EDGE_LENGTH = 0.5; // meters
+  const validEdges = roadGraph.edges.filter((edge) => {
+    for (let i = 0; i < edge.polyline.length - 1; i++) {
+      const a = edge.polyline[i];
+      const b = edge.polyline[i + 1];
+      if (Math.hypot(b.x - a.x, b.y - a.y) < MIN_EDGE_LENGTH) return false;
+    }
+    return true;
+  });
+
   const lines = [
-    ...roadGraph.edges.map((edge) => lineString(edge.polyline.map((p) => [p.x, p.y]))),
+    ...validEdges.map((edge) => lineString(edge.polyline.map((p) => [p.x, p.y]))),
     ...tileBoundary.map((p, i) => {
       const next = tileBoundary[(i + 1) % tileBoundary.length];
       return lineString([[p.x, p.y], [next.x, next.y]]);
     }),
   ];
 
-  const blocks = polygonize(featureCollection(lines));
+  let blocks;
+  try {
+    blocks = polygonize(featureCollection(lines));
+  } catch (err) {
+    // Belt-and-suspenders: organic, randomized road geometry can still surprise turf in
+    // ways the length filter above doesn't catch — fail this tile's subdivision instead
+    // of crashing the whole unlock request.
+    console.error('subdivideIntoParcels: polygonize failed, returning no parcels for this tile:', err);
+    return [];
+  }
 
   const parcels: Parcel[] = [];
   for (const block of blocks.features) {
