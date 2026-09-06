@@ -1,8 +1,8 @@
 import { useCityStore } from '../../store/cityStore';
 import { useTileUnlock } from '../../hooks/useTileUnlock';
+import { CITY_ID } from '../../constants';
 
 const GRID_SIZE = 5;
-const CITY_ID = 'default'; // single-city MVP; multi-city selection comes later
 
 export function TileUnlockButton() {
   const tiles = useCityStore((s) => s.tiles);

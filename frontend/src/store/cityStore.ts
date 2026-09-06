@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { Cell, Parcel, RoadGraph, Tile, TransitLine } from '../types/grid';
-import type { UnlockTileResult } from '../api/tiles';
+import type { CityStateResponse, UnlockTileResult } from '../api/tiles';
 
 interface CityState {
   tiles: Tile[];
@@ -18,6 +18,7 @@ interface CityState {
   setSelectedCells: (ids: string[]) => void;
   updateCellZone: (ids: string[], zoneType: Cell['zoneType']) => void;
   applyUnlockResult: (result: UnlockTileResult) => void;
+  hydrate: (snapshot: CityStateResponse) => void;
 }
 
 export const useCityStore = create<CityState>((set, get) => ({
@@ -75,5 +76,18 @@ export const useCityStore = create<CityState>((set, get) => ({
     upsertParcels(result.parcels);
     mergeRoadGraph(result.roadGraph);
     setTransitLines(result.transitLines); // already the full city-wide list from the backend
+  },
+
+  // Full replace, not merge — this is a complete snapshot from GET /api/tiles/:cityId,
+  // called once on mount so a page reload shows whatever the backend already knows about
+  // instead of an empty grid that then 409s the moment you click an "already unlocked" tile.
+  hydrate: (snapshot) => {
+    set({
+      tiles: snapshot.tiles,
+      cells: new Map(snapshot.cells.map((c) => [c.id, c])),
+      parcels: new Map(snapshot.parcels.map((p) => [p.id, p])),
+      roadGraph: snapshot.roadGraph,
+      transitLines: snapshot.transitLines,
+    });
   },
 }));

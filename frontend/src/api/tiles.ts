@@ -10,6 +10,15 @@ export interface UnlockTileResult {
   transitLines: TransitLine[];
 }
 
+export interface CityStateResponse {
+  tiles: Tile[];
+  roadGraph: RoadGraph;
+  parcels: Parcel[];
+  cells: Cell[];
+  transitLines: TransitLine[];
+  demand: { population: number; jobs: number };
+}
+
 // requireApiKey on the backend is a stopgap for trusted/service callers, not for a public
 // browser client — any VITE_* env var gets inlined into the built JS bundle, so shipping
 // the key here would leak it to every visitor. The frontend needs real session/cookie auth
@@ -30,8 +39,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-export function fetchTiles(cityId: string): Promise<Tile[]> {
-  return request<Tile[]>(`/api/tiles/${cityId}`);
+export function fetchCityState(cityId: string): Promise<CityStateResponse> {
+  return request<CityStateResponse>(`/api/tiles/${cityId}`);
 }
 
 export function unlockTile(
