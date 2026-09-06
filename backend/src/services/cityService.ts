@@ -67,6 +67,32 @@ function findSeedPoints(roadGraph: RoadGraph, boundary: Point[]): Point[] {
   return seeds;
 }
 
+// A single seed only grows a small road cluster (agentGrowth's maxDepth bounds how far
+// branches reach), nowhere near covering a full 2000x2000m tile — the rest ended up with
+// no roads at all, and blockSubdivider then treated that whole unroaded area as one giant
+// block (backed only by the tile boundary), rendering as one solid zoning color covering
+// most of the tile. Spread seeds across a 3x3 grid (with jitter, so it doesn't look like a
+// literal grid) so road coverage — and therefore block/parcel subdivision — actually spans
+// the tile.
+const INTERIOR_SEED_GRID = 3;
+function interiorSeedGrid(boundary: Point[]): Point[] {
+  const minX = Math.min(...boundary.map((p) => p.x));
+  const minY = Math.min(...boundary.map((p) => p.y));
+  const cellSize = TILE_SIZE / INTERIOR_SEED_GRID;
+  const seeds: Point[] = [];
+  for (let i = 0; i < INTERIOR_SEED_GRID; i++) {
+    for (let j = 0; j < INTERIOR_SEED_GRID; j++) {
+      const jitterX = (Math.random() - 0.5) * cellSize * 0.4;
+      const jitterY = (Math.random() - 0.5) * cellSize * 0.4;
+      seeds.push({
+        x: minX + (i + 0.5) * cellSize + jitterX,
+        y: minY + (j + 0.5) * cellSize + jitterY,
+      });
+    }
+  }
+  return seeds;
+}
+
 // Rough population/jobs-per-m2 used only to turn zoning recommendations into a demand
 // signal for the transit router's gravity model — not a simulation, just enough to make
 // "denser area -> more corridor demand" hold.
@@ -148,9 +174,9 @@ export function unlockTile(city: CityState, cityId: string, gridX: number, gridY
   const boundary = tileBoundaryFor(gridX, gridY);
   const cbdCenter = { x: (GRID_SIZE * TILE_SIZE) / 2, y: (GRID_SIZE * TILE_SIZE) / 2 };
 
-  const seeds = findSeedPoints(city.roadGraph, boundary);
-  const fallbackSeed = { x: boundary[0].x + TILE_SIZE / 2, y: boundary[0].y + TILE_SIZE / 2 };
-  const newRoads = generateRoads(seeds.length > 0 ? seeds : [fallbackSeed], boundary, [], style);
+  const boundarySeeds = findSeedPoints(city.roadGraph, boundary);
+  const seeds = [...boundarySeeds, ...interiorSeedGrid(boundary)];
+  const newRoads = generateRoads(seeds, boundary, [], style);
 
   city.roadGraph = {
     nodes: [...city.roadGraph.nodes, ...newRoads.nodes],
