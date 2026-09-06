@@ -1,28 +1,22 @@
 import { Router } from 'express';
 import { requireApiKey } from '../middleware/apiKey.js';
 import { resolveStyle } from '../config/styles.js';
-import { GRID_SIZE, createCityState, unlockTile, type CityState } from '../services/cityService.js';
+import { GRID_SIZE, unlockTile } from '../services/cityService.js';
+import { loadCityState, saveCityState } from '../db/cityRepository.js';
 
 export const tilesRouter = Router();
 
-// In-memory placeholder store — swap for real DB (schema in src/db/schema.sql) once persistence is wired up.
-const cities = new Map<string, CityState>();
-
-function getOrCreateCity(cityId: string): CityState {
-  let city = cities.get(cityId);
-  if (!city) {
-    city = createCityState();
-    cities.set(cityId, city);
+tilesRouter.get('/:cityId', async (req, res) => {
+  try {
+    const city = await loadCityState(req.params.cityId);
+    res.json(city.tiles);
+  } catch (err) {
+    console.error('GET /api/tiles/:cityId failed:', err);
+    res.status(500).json({ error: 'failed to load city state' });
   }
-  return city;
-}
-
-tilesRouter.get('/:cityId', (req, res) => {
-  const city = getOrCreateCity(req.params.cityId);
-  res.json(city.tiles);
 });
 
-tilesRouter.post('/:cityId/unlock', requireApiKey, (req, res) => {
+tilesRouter.post('/:cityId/unlock', requireApiKey, async (req, res) => {
   const { gridX, gridY, style: styleName } = req.body as { gridX?: unknown; gridY?: unknown; style?: unknown };
 
   const isValidCoord = (v: unknown): v is number =>
@@ -33,15 +27,22 @@ tilesRouter.post('/:cityId/unlock', requireApiKey, (req, res) => {
     return;
   }
 
-  const city = getOrCreateCity(req.params.cityId);
+  try {
+    const city = await loadCityState(req.params.cityId);
 
-  if (city.tiles.some((t) => t.gridX === gridX && t.gridY === gridY)) {
-    res.status(409).json({ error: 'tile already unlocked' });
-    return;
+    if (city.tiles.some((t) => t.gridX === gridX && t.gridY === gridY)) {
+      res.status(409).json({ error: 'tile already unlocked' });
+      return;
+    }
+
+    const style = resolveStyle(typeof styleName === 'string' ? styleName : undefined);
+    const result = unlockTile(city, req.params.cityId, gridX, gridY, style);
+
+    await saveCityState(req.params.cityId, city);
+
+    res.status(201).json(result);
+  } catch (err) {
+    console.error('POST /api/tiles/:cityId/unlock failed:', err);
+    res.status(500).json({ error: 'failed to unlock tile' });
   }
-
-  const style = resolveStyle(typeof styleName === 'string' ? styleName : undefined);
-  const result = unlockTile(city, req.params.cityId, gridX, gridY, style);
-
-  res.status(201).json(result);
 });
